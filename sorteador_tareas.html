@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#172554">
+<title>Sorteador de tareas</title>
+<style>
+:root{color-scheme:light;--bg:#f3f5fa;--card:#fff;--ink:#172033;--muted:#687386;--blue:#3157d5;--line:#e4e8f0;--green:#16845b;--red:#c43d4d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{width:min(100% - 28px,620px);margin:0 auto;padding:24px 0 calc(32px + env(safe-area-inset-bottom))}
+header{padding:8px 2px 18px}
+h1{font-size:27px;line-height:1.15;margin:0 0 7px;letter-spacing:-.6px}
+.sub{margin:0;color:var(--muted);font-size:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:17px;margin:0 0 14px;box-shadow:0 5px 18px #18264a08}
+label{display:block;font-weight:650;font-size:13px;margin:0 0 7px}
+input,textarea,button{font:inherit}
+input[type=text]{width:100%;border:1px solid #d8deea;border-radius:12px;padding:13px 12px;background:#fff;color:var(--ink);outline:none}
+input:focus{border-color:var(--blue);box-shadow:0 0 0 3px #3157d51a}
+.addrow{display:flex;gap:9px}
+.addrow input{min-width:0;flex:1}
+button{border:0;border-radius:12px;padding:12px 15px;font-weight:700;cursor:pointer;touch-action:manipulation}
+button:active{transform:scale(.98)}
+.primary{background:var(--blue);color:white}
+.secondary{background:#edf1ff;color:#2949b8}
+.ghost{background:#f1f3f7;color:#4c5668}
+.danger{background:#fff0f1;color:var(--red)}
+.drawbox{text-align:center;background:linear-gradient(145deg,#172554,#263f88);color:white;border:0;padding:22px 18px}
+.drawbox .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:#c9d5ff;font-weight:750}
+.drawbox h2{font-size:21px;margin:10px 0 15px}
+#picked{min-height:58px;display:grid;place-items:center;font-size:20px;font-weight:750;padding:8px 4px;overflow-wrap:anywhere}
+#picked.empty{font-size:14px;font-weight:500;color:#d5defd}
+.drawbox button{background:#fff;color:#203b91;min-width:170px;margin-top:12px}
+.stats{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:13px;margin:0 2px 12px}
+.sectionhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.sectionhead h2{font-size:17px;margin:0}
+.filters{display:flex;gap:6px}
+.filters button{padding:7px 10px;font-size:12px;background:#f0f2f7;color:#586276}
+.filters button.active{background:#e7ecff;color:#2848b8}
+ul{list-style:none;margin:0;padding:0}
+.task{display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.task:first-child{border-top:0}
+.task input{width:20px;height:20px;accent-color:var(--green);flex-shrink:0}
+.taskname{flex:1;min-width:0;overflow-wrap:anywhere}
+.task.done .taskname{text-decoration:line-through;color:#929baa}
+.task .remove{padding:7px 9px;font-size:12px;background:#fff1f2;color:var(--red)}
+.emptylist{text-align:center;color:var(--muted);padding:18px 5px;font-size:14px}
+.footer{font-size:12px;color:var(--muted);text-align:center;padding:8px 12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.actions button{font-size:13px;padding:9px 11px}
+#toast{min-height:18px;color:#d9e3ff;font-size:13px;margin-top:8px}
+@media(min-width:520px){main{padding-top:34px}.panel{padding:20px}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🎯 Sorteador de tareas</h1>
+    <p class="sub">Anotá lo que tenés pendiente y dejá que el azar elija por dónde empezar.</p>
+  </header>
+
+  <section class="panel" aria-label="Agregar tarea">
+    <form id="taskForm">
+      <label for="taskInput">Nueva tarea</label>
+      <div class="addrow">
+        <input id="taskInput" type="text" maxlength="180" placeholder="Ej.: estudiar Python 20 minutos" autocomplete="off" required>
+        <button class="primary" type="submit">Agregar</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel drawbox" aria-label="Sorteo de tareas">
+    <div class="eyebrow">¿Cuál hago ahora?</div>
+    <div id="picked" class="empty" aria-live="polite">Agregá tareas pendientes y tocá “Sortear”.</div>
+    <button id="drawBtn" type="button">🎲 Sortear tarea</button>
+    <div id="toast" aria-live="polite"></div>
+  </section>
+
+  <section class="panel">
+    <div class="stats"><span id="pendingCount">0 pendientes</span><span id="doneCount">0 completadas</span></div>
+    <div class="sectionhead">
+      <h2>Mis tareas</h2>
+      <div class="filters" role="group" aria-label="Filtrar tareas">
+        <button type="button" class="active" data-filter="all">Todas</button>
+        <button type="button" data-filter="pending">Pendientes</button>
+        <button type="button" data-filter="done">Hechas</button>
+      </div>
+    </div>
+    <ul id="taskList"></ul>
+    <div id="emptyList" class="emptylist">Todavía no agregaste tareas.</div>
+    <div class="actions">
+      <button id="clearDone" class="ghost" type="button">Borrar completadas</button>
+      <button id="clearAll" class="danger" type="button">Borrar todas</button>
+    </div>
+  </section>
+  <p class="footer">🔒 Tus tareas se guardan en este teléfono y navegador mediante almacenamiento local. No se envían a internet.</p>
+</main>
+<script>
+(() => {
+  const STORAGE_KEY = "sorteador_tareas_v1";
+  const form = document.getElementById("taskForm");
+  const input = document.getElementById("taskInput");
+  const list = document.getElementById("taskList");
+  const empty = document.getElementById("emptyList");
+  const picked = document.getElementById("picked");
+  const toast = document.getElementById("toast");
+  let tasks = [];
+  let filter = "all";
+  let lastPickedId = null;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    if (Array.isArray(saved)) tasks = saved.filter(t => t && typeof t.id === "string" && typeof t.name === "string");
+  } catch (e) { tasks = []; }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+    catch (e) { toast.textContent = "No se pudo guardar. Revisá el espacio disponible del navegador."; }
+  }
+  function render() {
+    list.innerHTML = "";
+    const visible = tasks.filter(t => filter === "all" || (filter === "pending" ? !t.done : t.done));
+    visible.forEach(task => {
+      const li = document.createElement("li");
+      li.className = "task" + (task.done ? " done" : "");
+      const check = document.createElement("input");
+      check.type = "checkbox"; check.checked = !!task.done;
+      check.setAttribute("aria-label", "Marcar como " + (task.done ? "pendiente" : "completada"));
+      check.addEventListener("change", () => {
+        task.done = check.checked; save(); render();
+        if (task.done && lastPickedId === task.id) {
+          picked.textContent = "¡Bien hecho! Tarea completada 🙌";
+          picked.classList.remove("empty");
+        }
+      });
+      const name = document.createElement("span");
+      name.className = "taskname"; name.textContent = task.name;
+      const remove = document.createElement("button");
+      remove.type = "button"; remove.className = "remove"; remove.textContent = "Eliminar";
+      remove.setAttribute("aria-label", "Eliminar " + task.name);
+      remove.addEventListener("click", () => {
+        tasks = tasks.filter(t => t.id !== task.id);
+        if (lastPickedId === task.id) resetPicked();
+        save(); render();
+      });
+      li.append(check, name, remove); list.append(li);
+    });
+    empty.style.display = visible.length ? "none" : "block";
+    empty.textContent = tasks.length === 0 ? "Todavía no agregaste tareas." :
+      filter === "pending" ? "No hay tareas pendientes." :
+      filter === "done" ? "Todavía no completaste tareas." : "No hay tareas para mostrar.";
+    const pending = tasks.filter(t => !t.done).length;
+    document.getElementById("pendingCount").textContent = pending + (pending === 1 ? " pendiente" : " pendientes");
+    const completed = tasks.length - pending;
+    document.getElementById("doneCount").textContent = completed + (completed === 1 ? " completada" : " completadas");
+  }
+  function resetPicked() {
+    picked.textContent = "Agregá tareas pendientes y tocá “Sortear”.";
+    picked.classList.add("empty"); lastPickedId = null;
+  }
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (!name) return;
+    tasks.unshift({id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), name, done:false});
+    input.value = ""; save(); render(); input.focus();
+    toast.textContent = "Tarea agregada.";
+  });
+  document.getElementById("drawBtn").addEventListener("click", () => {
+    const pendingTasks = tasks.filter(t => !t.done);
+    if (!pendingTasks.length) {
+      picked.textContent = "No hay tareas pendientes. ¡Agregá una nueva!";
+      picked.classList.add("empty"); lastPickedId = null; toast.textContent = "";
+      return;
+    }
+    let choices = pendingTasks;
+    if (pendingTasks.length > 1 && lastPickedId) {
+      const withoutLast = pendingTasks.filter(t => t.id !== lastPickedId);
+      if (withoutLast.length) choices = withoutLast;
+    }
+    const choice = choices[Math.floor(Math.random() * choices.length)];
+    lastPickedId = choice.id;
+    picked.textContent = choice.name;
+    picked.classList.remove("empty");
+    toast.textContent = "Esta es tu tarea elegida. ¡A por ella!";
+  });
+  document.querySelectorAll("[data-filter]").forEach(btn => btn.addEventListener("click", () => {
+    filter = btn.dataset.filter;
+    document.querySelectorAll("[data-filter]").forEach(b => b.classList.toggle("active", b === btn));
+    render();
+  }));
+  document.getElementById("clearDone").addEventListener("click", () => {
+    const count = tasks.filter(t => t.done).length;
+    if (!count) { toast.textContent = "No hay tareas completadas para borrar."; return; }
+    if (!confirm("¿Borrar las " + count + " tareas completadas?")) return;
+    tasks = tasks.filter(t => !t.done); resetPicked(); save(); render(); toast.textContent = "Tareas completadas borradas.";
+  });
+  document.getElementById("clearAll").addEventListener("click", () => {
+    if (!tasks.length) { toast.textContent = "La lista ya está vacía."; return; }
+    if (!confirm("¿Seguro que querés borrar todas las tareas? Esta acción no se puede deshacer.")) return;
+    tasks = []; resetPicked(); save(); render(); toast.textContent = "Todas las tareas fueron borradas.";
+  });
+  render();
+})();
+</script>
+</body>
+</html>
