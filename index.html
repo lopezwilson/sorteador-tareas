@@ -32,7 +32,17 @@ button:active{transform:scale(.98)}
 #picked{min-height:58px;display:grid;place-items:center;font-size:20px;font-weight:750;padding:8px 4px;overflow-wrap:anywhere}
 #picked.empty{font-size:14px;font-weight:500;color:#d5defd}
 .drawbox button{background:#fff;color:#203b91;min-width:170px;margin-top:12px}
+.focusbox{background:#fffaf0;border-color:#f1dfb6}
+.focusbox h2{font-size:18px;margin:0 0 5px}
+.focus-sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+#focusTask{font-weight:700;overflow-wrap:anywhere}
+.timer{font-variant-numeric:tabular-nums;font-size:48px;letter-spacing:2px;line-height:1;margin:15px 0;color:#172554;text-align:center}
+.timer-status{text-align:center;color:var(--muted);font-size:13px;min-height:19px}
+.timer-controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+.timer-controls button{padding:10px 14px}
+.timer-controls select{border:1px solid #d8deea;border-radius:10px;padding:9px 10px;background:#fff;color:var(--ink);font:inherit}
 .stats{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:13px;margin:0 2px 12px}
+.drawstats{background:#f7f8fc;border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:0 0 14px;padding:9px 10px;overflow-wrap:anywhere}
 .sectionhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
 .sectionhead h2{font-size:17px;margin:0}
 .filters{display:flex;gap:6px}
@@ -43,6 +53,7 @@ ul{list-style:none;margin:0;padding:0}
 .task:first-child{border-top:0}
 .task input{width:20px;height:20px;accent-color:var(--green);flex-shrink:0}
 .taskname{flex:1;min-width:0;overflow-wrap:anywhere}
+.taskmeta{display:block;color:var(--muted);font-size:12px;margin-top:2px}
 .task.done .taskname{text-decoration:line-through;color:#929baa}
 .task .remove{padding:7px 9px;font-size:12px;background:#fff1f2;color:var(--red)}
 .emptylist{text-align:center;color:var(--muted);padding:18px 5px;font-size:14px}
@@ -77,13 +88,33 @@ ul{list-style:none;margin:0;padding:0}
     <div id="toast" aria-live="polite"></div>
   </section>
 
+  <section class="panel focusbox" aria-label="Modo enfoque">
+    <h2>⏱️ Modo enfoque</h2>
+    <p class="focus-sub">Concentrate en la tarea sorteada: <span id="focusTask">todavía no elegiste ninguna</span></p>
+    <div id="timerDisplay" class="timer" aria-live="polite">25:00</div>
+    <div id="timerStatus" class="timer-status" aria-live="polite">Elegí una tarea para comenzar.</div>
+    <div class="timer-controls">
+      <select id="timerDuration" aria-label="Duración del cronómetro">
+        <option value="5">5 minutos</option>
+        <option value="10">10 minutos</option>
+        <option value="15">15 minutos</option>
+        <option value="25" selected>25 minutos</option>
+        <option value="45">45 minutos</option>
+      </select>
+      <button id="timerStart" class="primary" type="button">Iniciar</button>
+      <button id="timerReset" class="ghost" type="button">Reiniciar</button>
+      <button id="timerFinish" class="secondary" type="button">Finalizar sesión</button>
+    </div>
+  </section>
+
   <section class="panel">
     <div class="stats"><span id="pendingCount">0 pendientes</span><span id="doneCount">0 completadas</span></div>
+    <div id="drawStats" class="drawstats" aria-live="polite">Todavía no hubo sorteos.</div>
     <div class="sectionhead">
       <h2>Mis tareas</h2>
       <div class="filters" role="group" aria-label="Filtrar tareas">
-        <button type="button" class="active" data-filter="all">Todas</button>
-        <button type="button" data-filter="pending">Pendientes</button>
+        <button type="button" data-filter="all">Todas</button>
+        <button type="button" class="active" data-filter="pending">Pendientes</button>
         <button type="button" data-filter="done">Hechas</button>
       </div>
     </div>
@@ -105,18 +136,54 @@ ul{list-style:none;margin:0;padding:0}
   const empty = document.getElementById("emptyList");
   const picked = document.getElementById("picked");
   const toast = document.getElementById("toast");
+  const focusTask = document.getElementById("focusTask");
+  const timerDisplay = document.getElementById("timerDisplay");
+  const timerStatus = document.getElementById("timerStatus");
+  const timerDuration = document.getElementById("timerDuration");
+  const timerStart = document.getElementById("timerStart");
+  const timerReset = document.getElementById("timerReset");
+  const timerFinish = document.getElementById("timerFinish");
   let tasks = [];
-  let filter = "all";
+  let filter = "pending";
   let lastPickedId = null;
+  let timerRemaining = 25 * 60;
+  let timerInterval = null;
 
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    if (Array.isArray(saved)) tasks = saved.filter(t => t && typeof t.id === "string" && typeof t.name === "string");
+    if (Array.isArray(saved)) tasks = saved.filter(t => t && typeof t.id === "string" && typeof t.name === "string")
+      .map(t => ({...t,
+        drawCount: Number.isFinite(t.drawCount) && t.drawCount >= 0 ? Math.floor(t.drawCount) : 0,
+        focusSeconds: Number.isFinite(t.focusSeconds) && t.focusSeconds >= 0 ? Math.floor(t.focusSeconds) : 0
+      }));
   } catch (e) { tasks = []; }
 
   function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
     catch (e) { toast.textContent = "No se pudo guardar. Revisá el espacio disponible del navegador."; }
+  }
+  function formatFocusTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (hours) return hours + " h " + remainingMinutes + " min";
+    return minutes + " min";
+  }
+  function updateTimerDisplay() {
+    const minutes = Math.floor(timerRemaining / 60).toString().padStart(2, "0");
+    const seconds = (timerRemaining % 60).toString().padStart(2, "0");
+    timerDisplay.textContent = minutes + ":" + seconds;
+  }
+  function resetTimer(message) {
+    clearInterval(timerInterval); timerInterval = null;
+    timerRemaining = Number(timerDuration.value) * 60;
+    updateTimerDisplay();
+    timerStart.textContent = "Iniciar";
+    timerStatus.textContent = message || (lastPickedId ? "Listo para comenzar." : "Elegí una tarea para comenzar.");
+  }
+  function setFocusTask(task) {
+    focusTask.textContent = task ? task.name : "todavía no elegiste ninguna";
+    resetTimer();
   }
   function render() {
     list.innerHTML = "";
@@ -130,18 +197,33 @@ ul{list-style:none;margin:0;padding:0}
       check.addEventListener("change", () => {
         task.done = check.checked; save(); render();
         if (task.done && lastPickedId === task.id) {
+          clearInterval(timerInterval); timerInterval = null;
           picked.textContent = "¡Bien hecho! Tarea completada 🙌";
           picked.classList.remove("empty");
+          focusTask.textContent = "tarea completada";
+          timerStart.disabled = true;
+          timerFinish.disabled = true;
+          timerStatus.textContent = "¡Bien hecho! Ahora podés sortear otra tarea.";
+        } else if (!task.done && lastPickedId === task.id) {
+          timerStart.disabled = false;
+          timerFinish.disabled = false;
+          focusTask.textContent = task.name;
+          resetTimer("Listo para continuar con esta tarea.");
         }
       });
       const name = document.createElement("span");
       name.className = "taskname"; name.textContent = task.name;
+      const taskInfo = document.createElement("span");
+      taskInfo.className = "taskmeta";
+      taskInfo.textContent = task.drawCount + (task.drawCount === 1 ? " sorteo" : " sorteos") +
+        " · " + formatFocusTime(task.focusSeconds) + " enfocados";
+      name.append(taskInfo);
       const remove = document.createElement("button");
       remove.type = "button"; remove.className = "remove"; remove.textContent = "Eliminar";
       remove.setAttribute("aria-label", "Eliminar " + task.name);
       remove.addEventListener("click", () => {
         tasks = tasks.filter(t => t.id !== task.id);
-        if (lastPickedId === task.id) resetPicked();
+        if (lastPickedId === task.id) { resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; }
         save(); render();
       });
       li.append(check, name, remove); list.append(li);
@@ -154,6 +236,10 @@ ul{list-style:none;margin:0;padding:0}
     document.getElementById("pendingCount").textContent = pending + (pending === 1 ? " pendiente" : " pendientes");
     const completed = tasks.length - pending;
     document.getElementById("doneCount").textContent = completed + (completed === 1 ? " completada" : " completadas");
+    const totalDraws = tasks.reduce((total, task) => total + task.drawCount, 0);
+    const ranking = [...tasks].sort((a, b) => b.drawCount - a.drawCount).slice(0, 3);
+    document.getElementById("drawStats").textContent = totalDraws === 0 ? "Todavía no hubo sorteos." :
+      "Sorteos totales: " + totalDraws + " · Más elegidas: " + ranking.map(task => task.name + " (" + task.drawCount + ")").join(" · ");
   }
   function resetPicked() {
     picked.textContent = "Agregá tareas pendientes y tocá “Sortear”.";
@@ -163,7 +249,7 @@ ul{list-style:none;margin:0;padding:0}
     e.preventDefault();
     const name = input.value.trim();
     if (!name) return;
-    tasks.unshift({id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), name, done:false});
+    tasks.unshift({id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), name, done:false, drawCount:0, focusSeconds:0});
     input.value = ""; save(); render(); input.focus();
     toast.textContent = "Tarea agregada.";
   });
@@ -172,18 +258,64 @@ ul{list-style:none;margin:0;padding:0}
     if (!pendingTasks.length) {
       picked.textContent = "No hay tareas pendientes. ¡Agregá una nueva!";
       picked.classList.add("empty"); lastPickedId = null; toast.textContent = "";
+      setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true;
       return;
     }
-    let choices = pendingTasks;
+    const thirdHighest = pendingTasks.length >= 3 ?
+      [...pendingTasks].sort((a, b) => b.drawCount - a.drawCount)[2].drawCount : Infinity;
+    let choices = pendingTasks.filter(task => task.drawCount <= thirdHighest);
     if (pendingTasks.length > 1 && lastPickedId) {
       const withoutLast = pendingTasks.filter(t => t.id !== lastPickedId);
-      if (withoutLast.length) choices = withoutLast;
+      const eligibleWithoutLast = choices.filter(t => t.id !== lastPickedId);
+      if (eligibleWithoutLast.length) choices = eligibleWithoutLast;
+      else if (withoutLast.length && choices.length === pendingTasks.length) choices = withoutLast;
     }
     const choice = choices[Math.floor(Math.random() * choices.length)];
+    choice.drawCount += 1;
     lastPickedId = choice.id;
+    save();
+    render();
+    timerStart.disabled = false;
+    timerFinish.disabled = false;
+    setFocusTask(choice);
     picked.textContent = choice.name;
     picked.classList.remove("empty");
     toast.textContent = "Esta es tu tarea elegida. ¡A por ella!";
+  });
+  timerStart.addEventListener("click", () => {
+    if (!lastPickedId || timerRemaining <= 0) {
+      timerStatus.textContent = "Primero sorteá una tarea pendiente.";
+      return;
+    }
+    if (timerInterval) {
+      clearInterval(timerInterval); timerInterval = null;
+      timerStart.textContent = "Continuar";
+      timerStatus.textContent = "Cronómetro pausado.";
+      return;
+    }
+    timerStart.textContent = "Pausar";
+    timerStatus.textContent = "Enfocado en tu tarea…";
+    timerInterval = setInterval(() => {
+      timerRemaining -= 1;
+      const focusedTask = tasks.find(task => task.id === lastPickedId && !task.done);
+      if (focusedTask) {
+        focusedTask.focusSeconds += 1;
+        save();
+        render();
+      }
+      updateTimerDisplay();
+      if (timerRemaining <= 0) {
+        clearInterval(timerInterval); timerInterval = null;
+        timerStart.textContent = "Iniciar";
+        timerStatus.textContent = "¡Sesión terminada! Revisá tu tarea.";
+      }
+    }, 1000);
+  });
+  timerDuration.addEventListener("change", () => resetTimer());
+  timerReset.addEventListener("click", () => resetTimer());
+  timerFinish.addEventListener("click", () => {
+    if (!lastPickedId) return;
+    resetTimer("Sesión finalizada. Podés retomarla cuando quieras.");
   });
   document.querySelectorAll("[data-filter]").forEach(btn => btn.addEventListener("click", () => {
     filter = btn.dataset.filter;
@@ -194,13 +326,16 @@ ul{list-style:none;margin:0;padding:0}
     const count = tasks.filter(t => t.done).length;
     if (!count) { toast.textContent = "No hay tareas completadas para borrar."; return; }
     if (!confirm("¿Borrar las " + count + " tareas completadas?")) return;
-    tasks = tasks.filter(t => !t.done); resetPicked(); save(); render(); toast.textContent = "Tareas completadas borradas.";
+    tasks = tasks.filter(t => !t.done); resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; save(); render(); toast.textContent = "Tareas completadas borradas.";
   });
   document.getElementById("clearAll").addEventListener("click", () => {
     if (!tasks.length) { toast.textContent = "La lista ya está vacía."; return; }
     if (!confirm("¿Seguro que querés borrar todas las tareas? Esta acción no se puede deshacer.")) return;
-    tasks = []; resetPicked(); save(); render(); toast.textContent = "Todas las tareas fueron borradas.";
+    tasks = []; resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; save(); render(); toast.textContent = "Todas las tareas fueron borradas.";
   });
+  timerStart.disabled = true;
+  timerFinish.disabled = true;
+  updateTimerDisplay();
   render();
 })();
 </script>
