@@ -18,6 +18,10 @@ label{display:block;font-weight:650;font-size:13px;margin:0 0 7px}
 input,textarea,button{font:inherit}
 input[type=text]{width:100%;border:1px solid #d8deea;border-radius:12px;padding:13px 12px;background:#fff;color:var(--ink);outline:none}
 input:focus{border-color:var(--blue);box-shadow:0 0 0 3px #3157d51a}
+.labelrow{display:flex;gap:9px;margin-top:10px}
+.labelrow input{min-width:0;flex:1}
+.labelrow select{flex:1;min-width:0;border:1px solid #d8deea;border-radius:12px;padding:13px 12px;background:#fff;color:var(--ink);font:inherit}
+.labelhint{display:block;color:var(--muted);font-size:12px;margin-top:6px}
 .addrow{display:flex;gap:9px}
 .addrow input{min-width:0;flex:1}
 button{border:0;border-radius:12px;padding:12px 15px;font-weight:700;cursor:pointer;touch-action:manipulation}
@@ -29,6 +33,9 @@ button:active{transform:scale(.98)}
 .drawbox{text-align:center;background:linear-gradient(145deg,#172554,#263f88);color:white;border:0;padding:22px 18px}
 .drawbox .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:#c9d5ff;font-weight:750}
 .drawbox h2{font-size:21px;margin:10px 0 15px}
+.drawfilter{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:0 auto 4px;color:#d5defd;font-size:13px}
+.drawfilter label{font-size:13px;margin:0;font-weight:600}
+.drawfilter select{border:0;border-radius:10px;padding:8px 30px 8px 10px;background:#fff;color:#203b91;font:inherit;max-width:100%}
 #picked{min-height:58px;display:grid;place-items:center;font-size:20px;font-weight:750;padding:8px 4px;overflow-wrap:anywhere}
 #picked.empty{font-size:14px;font-weight:500;color:#d5defd}
 .drawbox button{background:#fff;color:#203b91;min-width:170px;margin-top:12px}
@@ -54,7 +61,9 @@ ul{list-style:none;margin:0;padding:0}
 .task input{width:20px;height:20px;accent-color:var(--green);flex-shrink:0}
 .taskname{flex:1;min-width:0;overflow-wrap:anywhere}
 .taskmeta{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.tag{display:inline-block;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:1px;text-decoration:none}
 .task.done .taskname{text-decoration:line-through;color:#929baa}
+.task.done .tag{opacity:.7}
 .task .remove{padding:7px 9px;font-size:12px;background:#fff1f2;color:var(--red)}
 .emptylist{text-align:center;color:var(--muted);padding:18px 5px;font-size:14px}
 .footer{font-size:12px;color:var(--muted);text-align:center;padding:8px 12px}
@@ -71,18 +80,14 @@ ul{list-style:none;margin:0;padding:0}
     <p class="sub">Anotá lo que tenés pendiente y dejá que el azar elija por dónde empezar.</p>
   </header>
 
-  <section class="panel" aria-label="Agregar tarea">
-    <form id="taskForm">
-      <label for="taskInput">Nueva tarea</label>
-      <div class="addrow">
-        <input id="taskInput" type="text" maxlength="180" placeholder="Ej.: estudiar Python 20 minutos" autocomplete="off" required>
-        <button class="primary" type="submit">Agregar</button>
-      </div>
-    </form>
-  </section>
-
   <section class="panel drawbox" aria-label="Sorteo de tareas">
     <div class="eyebrow">¿Cuál hago ahora?</div>
+    <div class="drawfilter">
+      <label for="drawLabel">Sortear en</label>
+      <select id="drawLabel" aria-label="Etiqueta para el sorteo">
+        <option value="all">Todas las etiquetas</option>
+      </select>
+    </div>
     <div id="picked" class="empty" aria-live="polite">Agregá tareas pendientes y tocá “Sortear”.</div>
     <button id="drawBtn" type="button">🎲 Sortear tarea</button>
     <div id="toast" aria-live="polite"></div>
@@ -105,6 +110,31 @@ ul{list-style:none;margin:0;padding:0}
       <button id="timerReset" class="ghost" type="button">Reiniciar</button>
       <button id="timerFinish" class="secondary" type="button">Finalizar sesión</button>
     </div>
+  </section>
+
+  <section class="panel" aria-label="Agregar tarea">
+    <form id="taskForm">
+      <label for="taskInput">Nueva tarea</label>
+      <div class="addrow">
+        <input id="taskInput" type="text" maxlength="180" placeholder="Ej.: estudiar Python 20 minutos" autocomplete="off" required>
+        <button class="primary" type="submit">Agregar</button>
+      </div>
+      <div class="labelrow">
+        <select id="taskLabel" aria-label="Etiqueta de la tarea">
+          <option value="">Sin etiqueta</option>
+        </select>
+      </div>
+      <span class="labelhint">Elegí una etiqueta creada previamente para agrupar la tarea.</span>
+    </form>
+  </section>
+
+  <section class="panel" aria-label="Administrar etiquetas">
+    <label for="labelInput">Nueva etiqueta</label>
+    <div class="addrow">
+      <input id="labelInput" type="text" maxlength="40" placeholder="Ej.: trabajo, estudio, casa" autocomplete="off">
+      <button id="addLabelBtn" class="secondary" type="button">Crear</button>
+    </div>
+    <span id="labelStatus" class="labelhint" aria-live="polite">Creá etiquetas para usarlas al agregar tareas.</span>
   </section>
 
   <section class="panel">
@@ -130,8 +160,21 @@ ul{list-style:none;margin:0;padding:0}
 <script>
 (() => {
   const STORAGE_KEY = "sorteador_tareas_v1";
+  const LABELS_STORAGE_KEY = "sorteador_etiquetas_v1";
+  const LABEL_COLORS_STORAGE_KEY = "sorteador_colores_etiquetas_v1";
+  const LABEL_COLORS = [
+    ["#dbeafe", "#1e40af"], ["#dcfce7", "#166534"], ["#fef3c7", "#92400e"],
+    ["#fce7f3", "#9d174d"], ["#ede9fe", "#5b21b6"], ["#cffafe", "#155e75"],
+    ["#ffedd5", "#9a3412"], ["#f1f5f9", "#334155"], ["#ecfccb", "#3f6212"],
+    ["#ffe4e6", "#9f1239"], ["#e0e7ff", "#3730a3"], ["#ccfbf1", "#115e59"]
+  ];
   const form = document.getElementById("taskForm");
   const input = document.getElementById("taskInput");
+  const taskLabel = document.getElementById("taskLabel");
+  const labelInput = document.getElementById("labelInput");
+  const addLabelBtn = document.getElementById("addLabelBtn");
+  const labelStatus = document.getElementById("labelStatus");
+  const drawLabel = document.getElementById("drawLabel");
   const list = document.getElementById("taskList");
   const empty = document.getElementById("emptyList");
   const picked = document.getElementById("picked");
@@ -144,7 +187,10 @@ ul{list-style:none;margin:0;padding:0}
   const timerReset = document.getElementById("timerReset");
   const timerFinish = document.getElementById("timerFinish");
   let tasks = [];
+  let labels = [];
+  let labelColors = {};
   let filter = "pending";
+  let drawLabelValue = "all";
   let lastPickedId = null;
   let timerRemaining = 25 * 60;
   let timerInterval = null;
@@ -154,13 +200,48 @@ ul{list-style:none;margin:0;padding:0}
     if (Array.isArray(saved)) tasks = saved.filter(t => t && typeof t.id === "string" && typeof t.name === "string")
       .map(t => ({...t,
         drawCount: Number.isFinite(t.drawCount) && t.drawCount >= 0 ? Math.floor(t.drawCount) : 0,
-        focusSeconds: Number.isFinite(t.focusSeconds) && t.focusSeconds >= 0 ? Math.floor(t.focusSeconds) : 0
+        focusSeconds: Number.isFinite(t.focusSeconds) && t.focusSeconds >= 0 ? Math.floor(t.focusSeconds) : 0,
+        label: typeof t.label === "string" ? t.label.trim() : ""
       }));
   } catch (e) { tasks = []; }
+  try {
+    const savedLabels = JSON.parse(localStorage.getItem(LABELS_STORAGE_KEY) || "[]");
+    if (Array.isArray(savedLabels)) labels = savedLabels.filter(label => typeof label === "string").map(label => label.trim()).filter(Boolean);
+  } catch (e) { labels = []; }
+  labels = [...new Set(labels.concat(tasks.map(task => task.label).filter(Boolean)))];
+  try {
+    const savedColors = JSON.parse(localStorage.getItem(LABEL_COLORS_STORAGE_KEY) || "{}");
+    if (savedColors && typeof savedColors === "object") labelColors = savedColors;
+  } catch (e) { labelColors = {}; }
 
   function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
     catch (e) { toast.textContent = "No se pudo guardar. Revisá el espacio disponible del navegador."; }
+  }
+  function saveLabels() {
+    try { localStorage.setItem(LABELS_STORAGE_KEY, JSON.stringify(labels)); }
+    catch (e) { labelStatus.textContent = "No se pudieron guardar las etiquetas."; }
+  }
+  function saveLabelColors() {
+    try { localStorage.setItem(LABEL_COLORS_STORAGE_KEY, JSON.stringify(labelColors)); }
+    catch (e) { labelStatus.textContent = "No se pudieron guardar los colores de las etiquetas."; }
+  }
+  function ensureLabelColors() {
+    let changed = false;
+    labels.forEach((label, index) => {
+      if (!labelColors[label]) {
+        labelColors[label] = LABEL_COLORS[index % LABEL_COLORS.length];
+        changed = true;
+      }
+    });
+    if (changed) saveLabelColors();
+  }
+  function applyLabelColor(element, label) {
+    const colors = labelColors[label];
+    if (colors) {
+      element.style.backgroundColor = colors[0];
+      element.style.color = colors[1];
+    }
   }
   function formatFocusTime(seconds) {
     const minutes = Math.floor(seconds / 60);
@@ -185,7 +266,24 @@ ul{list-style:none;margin:0;padding:0}
     focusTask.textContent = task ? task.name : "todavía no elegiste ninguna";
     resetTimer();
   }
+  function refreshLabelOptions() {
+    ensureLabelColors();
+    const sortedLabels = [...labels].sort((a, b) => a.localeCompare(b, "es", {sensitivity:"base"}));
+    taskLabel.innerHTML = '<option value="">Sin etiqueta</option>' +
+      sortedLabels.map(label => '<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>').join("");
+    const selectedTaskLabel = taskLabel.value;
+    taskLabel.value = labels.includes(selectedTaskLabel) ? selectedTaskLabel : "";
+    const current = drawLabelValue;
+    drawLabel.innerHTML = '<option value="all">Todas las etiquetas</option>' +
+      sortedLabels.map(label => '<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>').join("");
+    drawLabelValue = labels.includes(current) || current === "all" ? current : "all";
+    drawLabel.value = drawLabelValue;
+  }
+  function escapeHtml(value) {
+    return value.replace(/[&<>'"]/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[character]));
+  }
   function render() {
+    refreshLabelOptions();
     list.innerHTML = "";
     const visible = tasks.filter(t => filter === "all" || (filter === "pending" ? !t.done : t.done));
     visible.forEach(task => {
@@ -213,6 +311,12 @@ ul{list-style:none;margin:0;padding:0}
       });
       const name = document.createElement("span");
       name.className = "taskname"; name.textContent = task.name;
+      if (task.label) {
+        const tag = document.createElement("span");
+        tag.className = "tag"; tag.textContent = task.label;
+        applyLabelColor(tag, task.label);
+        name.append(tag);
+      }
       const taskInfo = document.createElement("span");
       taskInfo.className = "taskmeta";
       taskInfo.textContent = task.drawCount + (task.drawCount === 1 ? " sorteo" : " sorteos") +
@@ -249,14 +353,28 @@ ul{list-style:none;margin:0;padding:0}
     e.preventDefault();
     const name = input.value.trim();
     if (!name) return;
-    tasks.unshift({id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), name, done:false, drawCount:0, focusSeconds:0});
-    input.value = ""; save(); render(); input.focus();
+    const label = taskLabel.value;
+    tasks.unshift({id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), name, label, done:false, drawCount:0, focusSeconds:0});
+    input.value = ""; taskLabel.value = ""; save(); render(); input.focus();
     toast.textContent = "Tarea agregada.";
   });
+  addLabelBtn.addEventListener("click", () => {
+    const label = labelInput.value.trim();
+    if (!label) { labelStatus.textContent = "Escribí un nombre para la etiqueta."; labelInput.focus(); return; }
+    if (labels.some(existing => existing.toLocaleLowerCase() === label.toLocaleLowerCase())) {
+      labelStatus.textContent = "Esa etiqueta ya existe."; labelInput.focus(); return;
+    }
+    labels.push(label); saveLabels(); ensureLabelColors(); labelInput.value = ""; render(); taskLabel.value = label;
+    labelStatus.textContent = "Etiqueta creada. Ya podés seleccionarla al agregar una tarea.";
+    labelInput.focus();
+  });
+  labelInput.addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); addLabelBtn.click(); }
+  });
   document.getElementById("drawBtn").addEventListener("click", () => {
-    const pendingTasks = tasks.filter(t => !t.done);
+    const pendingTasks = tasks.filter(t => !t.done && (drawLabelValue === "all" || t.label === drawLabelValue));
     if (!pendingTasks.length) {
-      picked.textContent = "No hay tareas pendientes. ¡Agregá una nueva!";
+      picked.textContent = drawLabelValue === "all" ? "No hay tareas pendientes. ¡Agregá una nueva!" : "No hay tareas pendientes con esta etiqueta.";
       picked.classList.add("empty"); lastPickedId = null; toast.textContent = "";
       setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true;
       return;
@@ -281,6 +399,14 @@ ul{list-style:none;margin:0;padding:0}
     picked.textContent = choice.name;
     picked.classList.remove("empty");
     toast.textContent = "Esta es tu tarea elegida. ¡A por ella!";
+    if (window.confirm("Sorteaste “" + choice.name + "”. ¿Querés iniciar ahora una sesión de concentración?")) {
+      timerStart.click();
+    }
+  });
+  drawLabel.addEventListener("change", () => {
+    drawLabelValue = drawLabel.value;
+    resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true;
+    toast.textContent = drawLabelValue === "all" ? "Sorteo configurado para todas las etiquetas." : "Sorteo configurado para “" + drawLabelValue + "”.";
   });
   timerStart.addEventListener("click", () => {
     if (!lastPickedId || timerRemaining <= 0) {
