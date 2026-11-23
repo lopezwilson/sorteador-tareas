@@ -62,6 +62,11 @@ ul{list-style:none;margin:0;padding:0}
 .taskname{flex:1;min-width:0;overflow-wrap:anywhere}
 .taskmeta{display:block;color:var(--muted);font-size:12px;margin-top:2px}
 .tag{display:inline-block;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:1px;text-decoration:none}
+.task-edit{display:flex;gap:6px;align-items:center;margin-top:8px}
+.task-edit select{min-width:0;flex:1;border:1px solid #d8deea;border-radius:8px;padding:6px 8px;background:#fff;color:var(--ink);font:inherit;font-size:12px}
+.task-edit button{padding:6px 8px;font-size:11px}
+.task-actions{display:flex;gap:5px;flex-shrink:0}
+.task-actions button{padding:7px 9px;font-size:12px}
 .task.done .taskname{text-decoration:line-through;color:#929baa}
 .task.done .tag{opacity:.7}
 .task .remove{padding:7px 9px;font-size:12px;background:#fff1f2;color:var(--red)}
@@ -322,6 +327,35 @@ ul{list-style:none;margin:0;padding:0}
       taskInfo.textContent = task.drawCount + (task.drawCount === 1 ? " sorteo" : " sorteos") +
         " · " + formatFocusTime(task.focusSeconds) + " enfocados";
       name.append(taskInfo);
+      const taskActions = document.createElement("div");
+      taskActions.className = "task-actions";
+      const editLabel = document.createElement("button");
+      editLabel.type = "button"; editLabel.className = "secondary"; editLabel.textContent = "Etiqueta";
+      editLabel.setAttribute("aria-label", "Editar etiqueta de " + task.name);
+      editLabel.addEventListener("click", () => {
+        if (name.querySelector(".task-edit")) return;
+        const editor = document.createElement("div");
+        editor.className = "task-edit";
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", "Nueva etiqueta para " + task.name);
+        select.innerHTML = '<option value="">Sin etiqueta</option>' +
+          labels.sort((a, b) => a.localeCompare(b, "es", {sensitivity:"base"}))
+            .map(label => '<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>').join("");
+        select.value = task.label;
+        const saveLabel = document.createElement("button");
+        saveLabel.type = "button"; saveLabel.className = "primary"; saveLabel.textContent = "Guardar";
+        const cancelEdit = document.createElement("button");
+        cancelEdit.type = "button"; cancelEdit.className = "ghost"; cancelEdit.textContent = "Cancelar";
+        saveLabel.addEventListener("click", () => {
+          task.label = select.value;
+          save(); render();
+          toast.textContent = "Etiqueta actualizada.";
+        });
+        cancelEdit.addEventListener("click", () => editor.remove());
+        editor.append(select, saveLabel, cancelEdit);
+        name.append(editor);
+        select.focus();
+      });
       const remove = document.createElement("button");
       remove.type = "button"; remove.className = "remove"; remove.textContent = "Eliminar";
       remove.setAttribute("aria-label", "Eliminar " + task.name);
@@ -330,7 +364,8 @@ ul{list-style:none;margin:0;padding:0}
         if (lastPickedId === task.id) { resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; }
         save(); render();
       });
-      li.append(check, name, remove); list.append(li);
+      taskActions.append(editLabel, remove);
+      li.append(check, name, taskActions); list.append(li);
     });
     empty.style.display = visible.length ? "none" : "block";
     empty.textContent = tasks.length === 0 ? "Todavía no agregaste tareas." :
