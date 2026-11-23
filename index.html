@@ -39,6 +39,16 @@ button:active{transform:scale(.98)}
 #picked{min-height:58px;display:grid;place-items:center;font-size:20px;font-weight:750;padding:8px 4px;overflow-wrap:anywhere}
 #picked.empty{font-size:14px;font-weight:500;color:#d5defd}
 .drawbox button{background:#fff;color:#203b91;min-width:170px;margin-top:12px}
+.lastdraw{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff;border-color:#d9e2f8}
+.lastdraw-copy{min-width:0}
+.lastdraw-eyebrow{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase}
+.lastdraw-name{font-size:16px;font-weight:750;margin-top:4px;overflow-wrap:anywhere}
+.lastdraw-meta{color:var(--muted);font-size:12px;margin-top:4px}
+.lastdraw-status{font-size:12px;font-weight:750;margin-top:3px}
+.lastdraw .tag{margin-left:0;margin-top:5px}
+.lastdraw button{flex-shrink:0;white-space:nowrap}
+.lastdraw.empty-last{color:var(--muted)}
+@media(max-width:430px){.lastdraw{align-items:stretch;flex-direction:column}.lastdraw button{width:100%}}
 .focusbox{background:#fffaf0;border-color:#f1dfb6}
 .focusbox h2{font-size:18px;margin:0 0 5px}
 .focus-sub{color:var(--muted);font-size:13px;margin:0 0 14px}
@@ -84,6 +94,17 @@ ul{list-style:none;margin:0;padding:0}
     <h1>🎯 Sorteador de tareas</h1>
     <p class="sub">Anotá lo que tenés pendiente y dejá que el azar elija por dónde empezar.</p>
   </header>
+
+  <section id="lastDraw" class="panel lastdraw empty-last" aria-label="Última tarea sorteada">
+    <div class="lastdraw-copy">
+      <div class="lastdraw-eyebrow">Última tarea sorteada</div>
+      <div id="lastDrawName" class="lastdraw-name">Todavía no sorteaste ninguna tarea.</div>
+      <div id="lastDrawStatus" class="lastdraw-status" hidden></div>
+      <div id="lastDrawMeta" class="lastdraw-meta" hidden></div>
+      <span id="lastDrawTag" class="tag" hidden></span>
+    </div>
+    <button id="resumeLastBtn" class="secondary" type="button" disabled>Cronometrar tarea</button>
+  </section>
 
   <section class="panel drawbox" aria-label="Sorteo de tareas">
     <div class="eyebrow">¿Cuál hago ahora?</div>
@@ -167,6 +188,7 @@ ul{list-style:none;margin:0;padding:0}
   const STORAGE_KEY = "sorteador_tareas_v1";
   const LABELS_STORAGE_KEY = "sorteador_etiquetas_v1";
   const LABEL_COLORS_STORAGE_KEY = "sorteador_colores_etiquetas_v1";
+  const LAST_DRAWN_STORAGE_KEY = "sorteador_ultima_tarea_v1";
   const LABEL_COLORS = [
     ["#dbeafe", "#1e40af"], ["#dcfce7", "#166534"], ["#fef3c7", "#92400e"],
     ["#fce7f3", "#9d174d"], ["#ede9fe", "#5b21b6"], ["#cffafe", "#155e75"],
@@ -180,6 +202,12 @@ ul{list-style:none;margin:0;padding:0}
   const addLabelBtn = document.getElementById("addLabelBtn");
   const labelStatus = document.getElementById("labelStatus");
   const drawLabel = document.getElementById("drawLabel");
+  const lastDraw = document.getElementById("lastDraw");
+  const lastDrawName = document.getElementById("lastDrawName");
+  const lastDrawStatus = document.getElementById("lastDrawStatus");
+  const lastDrawMeta = document.getElementById("lastDrawMeta");
+  const lastDrawTag = document.getElementById("lastDrawTag");
+  const resumeLastBtn = document.getElementById("resumeLastBtn");
   const list = document.getElementById("taskList");
   const empty = document.getElementById("emptyList");
   const picked = document.getElementById("picked");
@@ -197,6 +225,7 @@ ul{list-style:none;margin:0;padding:0}
   let filter = "pending";
   let drawLabelValue = "all";
   let lastPickedId = null;
+  let lastDrawnId = null;
   let timerRemaining = 25 * 60;
   let timerInterval = null;
 
@@ -215,6 +244,10 @@ ul{list-style:none;margin:0;padding:0}
   } catch (e) { labels = []; }
   labels = [...new Set(labels.concat(tasks.map(task => task.label).filter(Boolean)))];
   try {
+    const savedLastDrawnId = localStorage.getItem(LAST_DRAWN_STORAGE_KEY);
+    if (savedLastDrawnId && tasks.some(task => task.id === savedLastDrawnId)) lastDrawnId = savedLastDrawnId;
+  } catch (e) { lastDrawnId = null; }
+  try {
     const savedColors = JSON.parse(localStorage.getItem(LABEL_COLORS_STORAGE_KEY) || "{}");
     if (savedColors && typeof savedColors === "object") labelColors = savedColors;
   } catch (e) { labelColors = {}; }
@@ -230,6 +263,12 @@ ul{list-style:none;margin:0;padding:0}
   function saveLabelColors() {
     try { localStorage.setItem(LABEL_COLORS_STORAGE_KEY, JSON.stringify(labelColors)); }
     catch (e) { labelStatus.textContent = "No se pudieron guardar los colores de las etiquetas."; }
+  }
+  function saveLastDrawn() {
+    try {
+      if (lastDrawnId) localStorage.setItem(LAST_DRAWN_STORAGE_KEY, lastDrawnId);
+      else localStorage.removeItem(LAST_DRAWN_STORAGE_KEY);
+    } catch (e) {}
   }
   function ensureLabelColors() {
     let changed = false;
@@ -247,6 +286,30 @@ ul{list-style:none;margin:0;padding:0}
       element.style.backgroundColor = colors[0];
       element.style.color = colors[1];
     }
+  }
+  function renderLastDraw() {
+    const task = tasks.find(item => item.id === lastDrawnId);
+    if (!task) {
+      lastDraw.classList.add("empty-last");
+      lastDrawName.textContent = "Todavía no sorteaste ninguna tarea.";
+      lastDrawStatus.hidden = true;
+      lastDrawMeta.hidden = true;
+      lastDrawTag.hidden = true;
+      resumeLastBtn.disabled = true;
+      return;
+    }
+    lastDraw.classList.remove("empty-last");
+    lastDrawName.textContent = task.name;
+    lastDrawStatus.hidden = false;
+    lastDrawStatus.textContent = "Estado: " + (task.done ? "Completada" : "Pendiente");
+    lastDrawStatus.style.color = task.done ? "var(--green)" : "var(--blue)";
+    lastDrawMeta.hidden = false;
+    lastDrawMeta.textContent = "Tiempo total dedicado: " + formatFocusTime(task.focusSeconds);
+    lastDrawTag.hidden = !task.label;
+    lastDrawTag.textContent = task.label;
+    applyLabelColor(lastDrawTag, task.label);
+    resumeLastBtn.disabled = !!task.done;
+    resumeLastBtn.textContent = task.done ? "Tarea completada" : "Cronometrar tarea";
   }
   function formatFocusTime(seconds) {
     const minutes = Math.floor(seconds / 60);
@@ -289,6 +352,7 @@ ul{list-style:none;margin:0;padding:0}
   }
   function render() {
     refreshLabelOptions();
+    renderLastDraw();
     list.innerHTML = "";
     const visible = tasks.filter(t => filter === "all" || (filter === "pending" ? !t.done : t.done));
     visible.forEach(task => {
@@ -362,6 +426,7 @@ ul{list-style:none;margin:0;padding:0}
       remove.addEventListener("click", () => {
         tasks = tasks.filter(t => t.id !== task.id);
         if (lastPickedId === task.id) { resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; }
+        if (lastDrawnId === task.id) { lastDrawnId = null; saveLastDrawn(); }
         save(); render();
       });
       taskActions.append(editLabel, remove);
@@ -426,6 +491,8 @@ ul{list-style:none;margin:0;padding:0}
     const choice = choices[Math.floor(Math.random() * choices.length)];
     choice.drawCount += 1;
     lastPickedId = choice.id;
+    lastDrawnId = choice.id;
+    saveLastDrawn();
     save();
     render();
     timerStart.disabled = false;
@@ -437,6 +504,16 @@ ul{list-style:none;margin:0;padding:0}
     if (window.confirm("Sorteaste “" + choice.name + "”. ¿Querés iniciar ahora una sesión de concentración?")) {
       timerStart.click();
     }
+  });
+  resumeLastBtn.addEventListener("click", () => {
+    const task = tasks.find(item => item.id === lastDrawnId && !item.done);
+    if (!task) return;
+    lastPickedId = task.id;
+    setFocusTask(task);
+    timerStart.disabled = false;
+    timerFinish.disabled = false;
+    document.querySelector(".focusbox").scrollIntoView({behavior:"smooth", block:"center"});
+    if (!timerInterval) timerStart.click();
   });
   drawLabel.addEventListener("change", () => {
     drawLabelValue = drawLabel.value;
@@ -492,7 +569,7 @@ ul{list-style:none;margin:0;padding:0}
   document.getElementById("clearAll").addEventListener("click", () => {
     if (!tasks.length) { toast.textContent = "La lista ya está vacía."; return; }
     if (!confirm("¿Seguro que querés borrar todas las tareas? Esta acción no se puede deshacer.")) return;
-    tasks = []; resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; save(); render(); toast.textContent = "Todas las tareas fueron borradas.";
+    tasks = []; lastDrawnId = null; saveLastDrawn(); resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; save(); render(); toast.textContent = "Todas las tareas fueron borradas.";
   });
   timerStart.disabled = true;
   timerFinish.disabled = true;
