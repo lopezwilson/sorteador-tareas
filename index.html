@@ -97,7 +97,7 @@ ul{list-style:none;margin:0;padding:0}
 
   <section id="lastDraw" class="panel lastdraw empty-last" aria-label="Última tarea sorteada">
     <div class="lastdraw-copy">
-      <div class="lastdraw-eyebrow">Última tarea sorteada</div>
+      <div id="lastDrawEyebrow" class="lastdraw-eyebrow">Última tarea sorteada</div>
       <div id="lastDrawName" class="lastdraw-name">Todavía no sorteaste ninguna tarea.</div>
       <div id="lastDrawStatus" class="lastdraw-status" hidden></div>
       <div id="lastDrawMeta" class="lastdraw-meta" hidden></div>
@@ -189,6 +189,7 @@ ul{list-style:none;margin:0;padding:0}
   const LABELS_STORAGE_KEY = "sorteador_etiquetas_v1";
   const LABEL_COLORS_STORAGE_KEY = "sorteador_colores_etiquetas_v1";
   const LAST_DRAWN_STORAGE_KEY = "sorteador_ultima_tarea_v1";
+  const DRAW_HISTORY_STORAGE_KEY = "sorteador_historial_sorteos_v1";
   const LABEL_COLORS = [
     ["#dbeafe", "#1e40af"], ["#dcfce7", "#166534"], ["#fef3c7", "#92400e"],
     ["#fce7f3", "#9d174d"], ["#ede9fe", "#5b21b6"], ["#cffafe", "#155e75"],
@@ -203,6 +204,7 @@ ul{list-style:none;margin:0;padding:0}
   const labelStatus = document.getElementById("labelStatus");
   const drawLabel = document.getElementById("drawLabel");
   const lastDraw = document.getElementById("lastDraw");
+  const lastDrawEyebrow = document.getElementById("lastDrawEyebrow");
   const lastDrawName = document.getElementById("lastDrawName");
   const lastDrawStatus = document.getElementById("lastDrawStatus");
   const lastDrawMeta = document.getElementById("lastDrawMeta");
@@ -226,6 +228,8 @@ ul{list-style:none;margin:0;padding:0}
   let drawLabelValue = "all";
   let lastPickedId = null;
   let lastDrawnId = null;
+  let lastDisplayedId = null;
+  let drawHistory = [];
   let timerRemaining = 25 * 60;
   let timerInterval = null;
 
@@ -247,6 +251,16 @@ ul{list-style:none;margin:0;padding:0}
     const savedLastDrawnId = localStorage.getItem(LAST_DRAWN_STORAGE_KEY);
     if (savedLastDrawnId && tasks.some(task => task.id === savedLastDrawnId)) lastDrawnId = savedLastDrawnId;
   } catch (e) { lastDrawnId = null; }
+  try {
+    const savedHistory = JSON.parse(localStorage.getItem(DRAW_HISTORY_STORAGE_KEY) || "[]");
+    if (Array.isArray(savedHistory)) drawHistory = savedHistory.filter(draw =>
+      draw && typeof draw.taskId === "string" && typeof draw.label === "string"
+    );
+  } catch (e) { drawHistory = []; }
+  if (lastDrawnId && !drawHistory.length) {
+    const lastTask = tasks.find(task => task.id === lastDrawnId);
+    if (lastTask) drawHistory = [{taskId: lastTask.id, label: lastTask.label || "", drawnAt: Date.now()}];
+  }
   try {
     const savedColors = JSON.parse(localStorage.getItem(LABEL_COLORS_STORAGE_KEY) || "{}");
     if (savedColors && typeof savedColors === "object") labelColors = savedColors;
@@ -270,6 +284,10 @@ ul{list-style:none;margin:0;padding:0}
       else localStorage.removeItem(LAST_DRAWN_STORAGE_KEY);
     } catch (e) {}
   }
+  function saveDrawHistory() {
+    try { localStorage.setItem(DRAW_HISTORY_STORAGE_KEY, JSON.stringify(drawHistory.slice(-100))); }
+    catch (e) {}
+  }
   function ensureLabelColors() {
     let changed = false;
     labels.forEach((label, index) => {
@@ -288,16 +306,24 @@ ul{list-style:none;margin:0;padding:0}
     }
   }
   function renderLastDraw() {
-    const task = tasks.find(item => item.id === lastDrawnId);
+    const selectedLabel = drawLabelValue === "all" ? "" : drawLabelValue;
+    const matchingDraws = selectedLabel ? drawHistory.filter(draw => draw.label === selectedLabel) : drawHistory;
+    const latestDraw = matchingDraws[matchingDraws.length - 1];
+    const task = latestDraw ? tasks.find(item => item.id === latestDraw.taskId) :
+      (selectedLabel ? null : tasks.find(item => item.id === lastDrawnId));
+    lastDrawEyebrow.textContent = selectedLabel ? "Última tarea sorteada · " + selectedLabel : "Última tarea sorteada";
     if (!task) {
+      lastDisplayedId = null;
       lastDraw.classList.add("empty-last");
-      lastDrawName.textContent = "Todavía no sorteaste ninguna tarea.";
+      lastDrawName.textContent = selectedLabel ?
+        "Todavía no sorteaste ninguna tarea con esta etiqueta." : "Todavía no sorteaste ninguna tarea.";
       lastDrawStatus.hidden = true;
       lastDrawMeta.hidden = true;
       lastDrawTag.hidden = true;
       resumeLastBtn.disabled = true;
       return;
     }
+    lastDisplayedId = task.id;
     lastDraw.classList.remove("empty-last");
     lastDrawName.textContent = task.name;
     lastDrawStatus.hidden = false;
@@ -425,6 +451,8 @@ ul{list-style:none;margin:0;padding:0}
       remove.setAttribute("aria-label", "Eliminar " + task.name);
       remove.addEventListener("click", () => {
         tasks = tasks.filter(t => t.id !== task.id);
+        drawHistory = drawHistory.filter(draw => draw.taskId !== task.id);
+        saveDrawHistory();
         if (lastPickedId === task.id) { resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; }
         if (lastDrawnId === task.id) { lastDrawnId = null; saveLastDrawn(); }
         save(); render();
@@ -492,6 +520,8 @@ ul{list-style:none;margin:0;padding:0}
     choice.drawCount += 1;
     lastPickedId = choice.id;
     lastDrawnId = choice.id;
+    drawHistory.push({taskId: choice.id, label: choice.label || "", drawnAt: Date.now()});
+    saveDrawHistory();
     saveLastDrawn();
     save();
     render();
@@ -506,7 +536,7 @@ ul{list-style:none;margin:0;padding:0}
     }
   });
   resumeLastBtn.addEventListener("click", () => {
-    const task = tasks.find(item => item.id === lastDrawnId && !item.done);
+    const task = tasks.find(item => item.id === lastDisplayedId && !item.done);
     if (!task) return;
     lastPickedId = task.id;
     setFocusTask(task);
@@ -517,7 +547,7 @@ ul{list-style:none;margin:0;padding:0}
   });
   drawLabel.addEventListener("change", () => {
     drawLabelValue = drawLabel.value;
-    resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true;
+    resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; renderLastDraw();
     toast.textContent = drawLabelValue === "all" ? "Sorteo configurado para todas las etiquetas." : "Sorteo configurado para “" + drawLabelValue + "”.";
   });
   timerStart.addEventListener("click", () => {
@@ -569,7 +599,7 @@ ul{list-style:none;margin:0;padding:0}
   document.getElementById("clearAll").addEventListener("click", () => {
     if (!tasks.length) { toast.textContent = "La lista ya está vacía."; return; }
     if (!confirm("¿Seguro que querés borrar todas las tareas? Esta acción no se puede deshacer.")) return;
-    tasks = []; lastDrawnId = null; saveLastDrawn(); resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; save(); render(); toast.textContent = "Todas las tareas fueron borradas.";
+    tasks = []; lastDrawnId = null; drawHistory = []; saveLastDrawn(); saveDrawHistory(); resetPicked(); setFocusTask(null); timerStart.disabled = true; timerFinish.disabled = true; save(); render(); toast.textContent = "Todas las tareas fueron borradas.";
   });
   timerStart.disabled = true;
   timerFinish.disabled = true;
