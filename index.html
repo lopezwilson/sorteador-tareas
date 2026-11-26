@@ -88,6 +88,46 @@ ul{list-style:none;margin:0;padding:0}
 .actions button{font-size:13px;padding:9px 11px}
 #toast{min-height:18px;color:#d9e3ff;font-size:13px;margin-top:8px}
 @media(min-width:520px){main{padding-top:34px}.panel{padding:20px}}
+
+/* Layout refinado: compacto en escritorio y cómodo en móvil */
+:root{--bg:#eef2f7;--card:#ffffff;--ink:#172033;--muted:#6c7789;--blue:#3451c7;--line:#e3e8f1;--green:#13845b;--red:#c43d4d;--shadow:0 10px 28px rgba(35,49,88,.07)}
+body{background:radial-gradient(circle at 12% 0%,#e1e8ff 0,transparent 28%),var(--bg);font-size:15px}
+main{width:min(100% - 32px,860px);display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;padding:28px 0 calc(28px + env(safe-area-inset-bottom))}
+header{grid-column:1/-1;display:flex;align-items:flex-end;justify-content:space-between;padding:4px 4px 10px}
+h1{font-size:30px;letter-spacing:-1px;margin-bottom:5px}
+.sub{font-size:13px}
+.panel{border-color:rgba(218,225,237,.9);border-radius:15px;padding:16px;margin:0;box-shadow:var(--shadow)}
+.lastdraw{grid-column:span 5;min-height:139px;align-items:flex-start;padding:17px}
+.lastdraw-eyebrow,.drawbox .eyebrow{font-size:10px;letter-spacing:1.1px}
+.lastdraw-name{font-size:15px;line-height:1.3;margin-top:6px}
+.lastdraw-meta{font-size:11px}
+.lastdraw button{font-size:12px;padding:9px 11px}
+.drawbox{grid-column:span 7;min-height:139px;padding:18px;background:linear-gradient(135deg,#172554,#304da5 70%,#4865c4);box-shadow:0 12px 28px rgba(32,55,130,.2)}
+.drawbox h2{font-size:19px;margin:7px 0 10px}
+.drawfilter{margin-bottom:0}
+#picked{min-height:40px;font-size:18px;padding:5px 4px}
+.drawbox button{margin-top:8px;padding:10px 14px;font-size:14px}
+.focusbox{grid-column:1/-1;background:#fffaf0;padding:16px}
+.focusbox h2{font-size:17px}
+.timer{font-size:42px;margin:12px 0}
+.timer-controls{margin-top:10px;gap:6px}
+.timer-controls button,.timer-controls select{padding:8px 10px;font-size:12px}
+.task-entry{grid-column:span 7}
+.label-entry{grid-column:span 5}
+.task-board{grid-column:1/-1}
+.task-board .stats{margin-bottom:9px}
+.task-board .drawstats{margin-bottom:11px;padding:8px 10px}
+.sectionhead{margin-bottom:8px}
+.sectionhead h2{font-size:16px}
+.task{padding:10px 0}
+.task-actions button{padding:6px 8px;font-size:11px}
+.footer{grid-column:1/-1;padding:2px 12px}
+@media(max-width:660px){
+  main{display:block;padding-top:20px}
+  header{padding:3px 2px 14px}
+  .panel{margin-bottom:11px}
+  .footer{margin-top:2px}
+}
 </style>
 </head>
 <body>
@@ -140,7 +180,7 @@ ul{list-style:none;margin:0;padding:0}
     </div>
   </section>
 
-  <section class="panel" aria-label="Agregar tarea">
+  <section class="panel task-entry" aria-label="Agregar tarea">
     <form id="taskForm">
       <label for="taskInput">Nueva tarea</label>
       <div class="addrow">
@@ -156,7 +196,7 @@ ul{list-style:none;margin:0;padding:0}
     </form>
   </section>
 
-  <section class="panel" aria-label="Administrar etiquetas">
+  <section class="panel label-entry" aria-label="Administrar etiquetas">
     <label for="labelInput">Nueva etiqueta</label>
     <div class="addrow">
       <input id="labelInput" type="text" maxlength="40" placeholder="Ej.: trabajo, estudio, casa" autocomplete="off">
@@ -165,7 +205,7 @@ ul{list-style:none;margin:0;padding:0}
     <span id="labelStatus" class="labelhint" aria-live="polite">Creá etiquetas para usarlas al agregar tareas.</span>
   </section>
 
-  <section class="panel">
+  <section class="panel task-board">
     <div class="stats"><span id="pendingCount">0 pendientes</span><span id="doneCount">0 completadas</span></div>
     <div id="drawStats" class="drawstats" aria-live="polite">Todavía no hubo sorteos.</div>
     <div class="sectionhead">
