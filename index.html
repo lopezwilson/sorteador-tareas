@@ -49,6 +49,7 @@ button:active{transform:scale(.98)}
 .lastdraw button{flex-shrink:0;white-space:nowrap}
 .lastdraw.empty-last{color:var(--muted)}
 @media(max-width:430px){.lastdraw{align-items:stretch;flex-direction:column}.lastdraw button{width:100%}}
+@media(max-width:430px){.sectionhead{align-items:flex-start;flex-direction:column}.filters{justify-content:flex-start}}
 .focusbox{background:#fffaf0;border-color:#f1dfb6}
 .focusbox h2{font-size:18px;margin:0 0 5px}
 .focus-sub{color:var(--muted);font-size:13px;margin:0 0 14px}
@@ -62,9 +63,10 @@ button:active{transform:scale(.98)}
 .drawstats{background:#f7f8fc;border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:0 0 14px;padding:9px 10px;overflow-wrap:anywhere}
 .sectionhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
 .sectionhead h2{font-size:17px;margin:0}
-.filters{display:flex;gap:6px}
+.filters{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .filters button{padding:7px 10px;font-size:12px;background:#f0f2f7;color:#586276}
 .filters button.active{background:#e7ecff;color:#2848b8}
+.filters select{border:1px solid #d8deea;border-radius:9px;padding:7px 9px;background:#fff;color:var(--ink);font:inherit;font-size:12px;max-width:150px}
 ul{list-style:none;margin:0;padding:0}
 .task{display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
 .task:first-child{border-top:0}
@@ -172,6 +174,9 @@ ul{list-style:none;margin:0;padding:0}
         <button type="button" data-filter="all">Todas</button>
         <button type="button" class="active" data-filter="pending">Pendientes</button>
         <button type="button" data-filter="done">Hechas</button>
+        <select id="taskListLabelFilter" aria-label="Filtrar tareas por etiqueta">
+          <option value="all">Todas las etiquetas</option>
+        </select>
       </div>
     </div>
     <ul id="taskList"></ul>
@@ -203,6 +208,7 @@ ul{list-style:none;margin:0;padding:0}
   const addLabelBtn = document.getElementById("addLabelBtn");
   const labelStatus = document.getElementById("labelStatus");
   const drawLabel = document.getElementById("drawLabel");
+  const taskListLabelFilter = document.getElementById("taskListLabelFilter");
   const lastDraw = document.getElementById("lastDraw");
   const lastDrawEyebrow = document.getElementById("lastDrawEyebrow");
   const lastDrawName = document.getElementById("lastDrawName");
@@ -225,6 +231,7 @@ ul{list-style:none;margin:0;padding:0}
   let labels = [];
   let labelColors = {};
   let filter = "pending";
+  let taskListLabelValue = "all";
   let drawLabelValue = "all";
   let lastPickedId = null;
   let lastDrawnId = null;
@@ -372,6 +379,11 @@ ul{list-style:none;margin:0;padding:0}
       sortedLabels.map(label => '<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>').join("");
     drawLabelValue = labels.includes(current) || current === "all" ? current : "all";
     drawLabel.value = drawLabelValue;
+    const currentTaskListLabel = taskListLabelValue;
+    taskListLabelFilter.innerHTML = '<option value="all">Todas las etiquetas</option>' +
+      sortedLabels.map(label => '<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>').join("");
+    taskListLabelValue = labels.includes(currentTaskListLabel) || currentTaskListLabel === "all" ? currentTaskListLabel : "all";
+    taskListLabelFilter.value = taskListLabelValue;
   }
   function escapeHtml(value) {
     return value.replace(/[&<>'"]/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[character]));
@@ -380,7 +392,10 @@ ul{list-style:none;margin:0;padding:0}
     refreshLabelOptions();
     renderLastDraw();
     list.innerHTML = "";
-    const visible = tasks.filter(t => filter === "all" || (filter === "pending" ? !t.done : t.done));
+    const visible = tasks.filter(t =>
+      (filter === "all" || (filter === "pending" ? !t.done : t.done)) &&
+      (taskListLabelValue === "all" || t.label === taskListLabelValue)
+    );
     visible.forEach(task => {
       const li = document.createElement("li");
       li.className = "task" + (task.done ? " done" : "");
@@ -462,6 +477,9 @@ ul{list-style:none;margin:0;padding:0}
     });
     empty.style.display = visible.length ? "none" : "block";
     empty.textContent = tasks.length === 0 ? "Todavía no agregaste tareas." :
+      taskListLabelValue !== "all" && filter === "pending" ? "No hay tareas pendientes con esta etiqueta." :
+      taskListLabelValue !== "all" && filter === "done" ? "No hay tareas completadas con esta etiqueta." :
+      taskListLabelValue !== "all" ? "No hay tareas con esta etiqueta." :
       filter === "pending" ? "No hay tareas pendientes." :
       filter === "done" ? "Todavía no completaste tareas." : "No hay tareas para mostrar.";
     const pending = tasks.filter(t => !t.done).length;
@@ -590,6 +608,10 @@ ul{list-style:none;margin:0;padding:0}
     document.querySelectorAll("[data-filter]").forEach(b => b.classList.toggle("active", b === btn));
     render();
   }));
+  taskListLabelFilter.addEventListener("change", () => {
+    taskListLabelValue = taskListLabelFilter.value;
+    render();
+  });
   document.getElementById("clearDone").addEventListener("click", () => {
     const count = tasks.filter(t => t.done).length;
     if (!count) { toast.textContent = "No hay tareas completadas para borrar."; return; }
